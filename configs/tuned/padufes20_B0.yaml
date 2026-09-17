@@ -1,0 +1,5 @@
+# Selected by scripts/tune.py (tune_padufes20_B0_002); val balanced accuracy 0.7028. Do not edit by hand.
+train:
+  lr: 0.001
+model:
+  head_dropout: 0.3
