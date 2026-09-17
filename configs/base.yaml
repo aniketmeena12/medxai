@@ -1,0 +1,48 @@
+# Shared defaults. Experiment configs `inherit` this file and override keys.
+# Paths: ${MEDFUSION_DATA} falls back to the project data/ folder (gitignored; project lives
+# outside OneDrive so data is never cloud-synced).
+paths:
+  data_root: ${MEDFUSION_DATA:C:/Projects/medfusion-xai/data}
+  runs_root: ${MEDFUSION_DATA:C:/Projects/medfusion-xai/data}/experiments
+
+image:
+  cache_size: 256        # images are cached square at this size by scripts/prepare_data.py
+  input_size: 224
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+model:
+  # Explicit pretrained tag: plain "convnext_tiny" resolves to in12k_ft_in1k in current timm.
+  backbone: convnext_tiny.fb_in1k
+  pretrained: true
+  freeze_stages: 2        # stem + first 2 stages frozen
+  meta_dim: 64            # per-field embedding size for vector-style fusion (concat/FiLM/MetaBlock)
+  meta_field_dropout: 0.2 # applied identically to every fusion model (data-level MISSING)
+  head_dropout: 0.3
+  crossattn:
+    n_blocks: 2
+    n_heads: 8
+    direction: img2meta
+
+train:
+  seeds: [0, 1, 2]
+  n_folds: 5
+  epochs: 40
+  batch_size: 32
+  accumulate: 1           # raise on the 6 GB GPU if batch_size must drop
+  lr: 3.0e-4
+  backbone_lr_mult: 0.1
+  weight_decay: 0.05
+  warmup_epochs: 3
+  patience: 8
+  val_fraction: 0.15      # inner validation split carved from the training folds (grouped)
+  num_workers: 4
+  amp: true
+  class_weights: balanced
+
+augment:
+  hflip: 0.5
+  vflip: 0.5
+  rotate: 30
+  color_jitter: 0.2
+  rrc_scale: [0.7, 1.0]

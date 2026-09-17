@@ -1,0 +1,45 @@
+# Data never goes into git (dataset licences prohibit redistribution). It lives in data/ (ignored).
+# Only the provenance files are tracked. Git cannot re-include a file inside an ignored folder,
+# so each parent folder is un-ignored and then its contents ignored again.
+data/*
+!data/.gitkeep
+!data/raw/
+data/raw/*
+!data/raw/SOURCE_TEMPLATE.md
+!data/raw/*/
+data/raw/*/*
+!data/raw/*/SOURCE.md
+!data/annotations/
+data/annotations/*
+!data/annotations/SOURCE.md
+!data/annotations/*.commit.txt
+
+# Runs and artifacts
+experiments/*/
+results/checkpoints/
+*.pt
+*.pth
+*.ckpt
+wandb/
+mlruns/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Secrets
+kaggle.json
+access_token
+.env
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
