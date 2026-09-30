@@ -96,7 +96,9 @@ class Deck:
         u.shadow.inherit = False
 
     def bullets(self, s, items, x=Inches(0.7), y=Inches(1.6), w=Inches(12.0),
-                h=Inches(5.4), size=17, gap=10):
+                h=None, size=17, gap=10):
+        if h is None:  # never let a text box run off the 7.5in slide
+            h = Emu(int(H) - int(y) - Inches(0.2))
         _, tf = self._box(s, x, y, w, h)
         for i, it in enumerate(items):
             p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
@@ -116,9 +118,9 @@ class Deck:
                 self._run(p, it, size - lvl, INK if not lvl else GREY)
         return tf
 
-    def figure(self, s, name, x, y, h):
+    def figure(self, s, name, x, y, width):
         img = FIGS / name
-        pic = s.shapes.add_picture(str(img), x, y, height=h)
+        pic = s.shapes.add_picture(str(img), x, y, width=width)
         return pic
 
     def chip(self, s, x, y, text, color):
@@ -233,18 +235,18 @@ def build(out: Path, students, supervisor):
     d.header(s, "Data", "Three public datasets, every download verified")
     rows = [
         ["ID", "Dataset", "What it gives us", "Role"],
-        ["A", "PAD-UFES-20", "2,298 phone photos, 1,373 patients, 21 patient-detail fields",
+        ["A", "PAD-UFES-20", "2,298 phone photos, 1,373 patients, 21 fields",
          "Rich-metadata tests"],
-        ["B", "HAM10000", "10,015 dermoscopy images + a lesion outline for every one",
+        ["B", "HAM10000", "10,015 dermoscopy images + lesion outlines",
          "Where-it-looks tests"],
-        ["C", "ISIC 2019 + traps", "25,331 images with built-in shortcut splits",
+        ["C", "ISIC 2019 + traps", "25,331 images with shortcut splits",
          "Shortcut robustness"],
-        ["D", "DDI (planned)", "656 biopsy-proven images across skin tones",
-         "Fairness - access pending"],
+        ["D", "DDI (planned)", "656 biopsy-proven, skin-tone balanced",
+         "Fairness (pending)"],
     ]
     table_shape = s.shapes.add_table(len(rows), 4, Inches(0.55), Inches(1.6),
-                                     Inches(12.2), Inches(3.4)).table
-    widths = [Inches(0.7), Inches(2.6), Inches(6.3), Inches(2.6)]
+                                     Inches(12.2), Inches(2.6)).table
+    widths = [Inches(0.65), Inches(2.4), Inches(6.35), Inches(2.8)]
     for j, wd in enumerate(widths):
         table_shape.columns[j].width = wd
     for i, row in enumerate(rows):
@@ -279,7 +281,7 @@ def build(out: Path, students, supervisor):
          False)],
         [("M1  Cross-attention", True, RGBColor(0x7C,0x3A,0xED)),
          ("  -  the image queries the patient details (the design we first proposed).", False)],
-    ], y=Inches(1.65), size=18, gap=12)
+    ], y=Inches(1.65), h=Inches(4.35), size=18, gap=12)
     note = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.7), Inches(6.15),
                               Inches(12.0), Inches(1.0))
     note.fill.solid(); note.fill.fore_color.rgb = LIGHT; note.line.color.rgb = ACCENT
@@ -305,7 +307,7 @@ def build(out: Path, students, supervisor):
          "measure how far the evidence moves.", False)],
         [("P5  Reliance", True, ACCENT), ("  -  accuracy lost when we remove the metadata vs. "
          "when we remove the image.", False)],
-    ], y=Inches(1.6), size=16, gap=9)
+    ], y=Inches(1.6), h=Inches(4.05), size=16, gap=9)
     note = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.7), Inches(5.85),
                               Inches(12.0), Inches(1.35))
     note.fill.solid(); note.fill.fore_color.rgb = NAVY; note.line.fill.background()
@@ -321,7 +323,7 @@ def build(out: Path, students, supervisor):
     # ---- 8 result: accuracy ------------------------------------------------
     s = d.slide()
     d.header(s, "Result 1  ·  accuracy", "Fusion helps a lot - or barely - depending on the data")
-    d.figure(s, "fig_accuracy.png", Inches(0.7), Inches(1.55), Inches(4.6))
+    d.figure(s, "fig_accuracy.png", Inches(0.4), Inches(2.7), Inches(6.0))
     b1 = _num("padufes20", "B1"); b0 = _num("padufes20", "B0")
     d.bullets(s, [
         [("PAD-UFES-20 (21 rich fields): ", True), ("fusion adds about 8 points. Patient "
@@ -331,12 +333,12 @@ def build(out: Path, students, supervisor):
         [("Two regimes in one study", True, ACCENT),
          (" - one where metadata is powerful, one where it is weak. That contrast is a strength.",
           False)],
-    ], x=Inches(7.5), y=Inches(1.8), w=Inches(5.4), size=15, gap=12)
+    ], x=Inches(6.75), y=Inches(1.75), w=Inches(6.2), size=15, gap=12)
 
     # ---- 9 result: grounding (central) ------------------------------------
     s = d.slide()
     d.header(s, "Result 2  ·  the central finding", "The way you combine decides where the model looks")
-    d.figure(s, "fig_grounding.png", Inches(0.6), Inches(1.5), Inches(4.7))
+    d.figure(s, "fig_grounding.png", Inches(0.4), Inches(2.15), Inches(6.0))
     e_b3 = _p1("B3", "energy_in_mask")
     e_b5 = _p1("B5", "energy_in_mask")
     e_b0 = _p1("B0", "energy_in_mask")
@@ -350,12 +352,12 @@ def build(out: Path, students, supervisor):
         "FiLM and cross-attention also look less than image-only.",
         [("All four differences are statistically solid; three separate measures agree.", True,
           INK)],
-    ], x=Inches(6.9), y=Inches(1.7), w=Inches(6.0), size=14.5, gap=10)
+    ], x=Inches(6.75), y=Inches(1.7), w=Inches(6.2), size=14.5, gap=10)
 
     # ---- 10 result: reliance ----------------------------------------------
     s = d.slide()
     d.header(s, "Result 3  ·  what they lean on", "Every fusion model leans on details more than image")
-    d.figure(s, "fig_reliance.png", Inches(0.6), Inches(1.5), Inches(4.7))
+    d.figure(s, "fig_reliance.png", Inches(0.4), Inches(2.15), Inches(6.0))
     d.bullets(s, [
         "On PAD-UFES-20, removing the patient details hurts every fusion model more than "
         "removing the image does.",
@@ -364,12 +366,12 @@ def build(out: Path, students, supervisor):
         "This is offloading, measured directly - not guessed from a heat map.",
         [("The image-only model loses exactly zero when details are scrambled - the check "
           "that proves the measurement is sound.", False, GREY)],
-    ], x=Inches(6.9), y=Inches(1.8), w=Inches(6.0), size=15, gap=12)
+    ], x=Inches(6.75), y=Inches(1.8), w=Inches(6.2), size=15, gap=12)
 
     # ---- 11 counterfactual + shortcut -------------------------------------
     s = d.slide()
     d.header(s, "Results 4 & 5  ·  two more checks", "Irrelevant details move the evidence; shortcuts fool everyone")
-    d.figure(s, "fig_degradation.png", Inches(0.6), Inches(1.5), Inches(4.7))
+    d.figure(s, "fig_degradation.png", Inches(0.4), Inches(2.15), Inches(6.0))
     d.bullets(s, [
         [("Counterfactual (P4): ", True), ("changing a detail that cannot affect a lesion - "
          "'household has piped water' - still moves the evidence. Cross-attention moves the "
@@ -379,7 +381,7 @@ def build(out: Path, students, supervisor):
          "hurts here.", False)],
         [("Offloading under a planted detail (P3): ", True), ("inconclusive - too few data "
          "points, and the honest answer is to say so.", False, GREY)],
-    ], x=Inches(6.9), y=Inches(1.7), w=Inches(6.0), size=14.5, gap=11)
+    ], x=Inches(6.75), y=Inches(1.7), w=Inches(6.2), size=14.5, gap=11)
 
     # ---- 12 statistics -----------------------------------------------------
     s = d.slide(LIGHT)
@@ -445,7 +447,7 @@ def build(out: Path, students, supervisor):
         [("Next: ", True, ACCENT), ("finalise figures, secondary checks, and write up for MIDL "
          "2027 (deadline ~Dec 2026). Framing shifts from 'same accuracy' to 'accuracy and "
          "evidence are separate things', which the data supports.", False)],
-    ], y=Inches(1.6), size=15.5, gap=13)
+    ], y=Inches(1.6), h=Inches(4.4), size=15.5, gap=13)
     thanks = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.7), Inches(6.2),
                                 Inches(12.0), Inches(0.95))
     thanks.fill.solid(); thanks.fill.fore_color.rgb = NAVY; thanks.line.fill.background()
