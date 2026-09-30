@@ -79,7 +79,8 @@ def fig_grounding():
     ax.text(len(ms) - 0.4, chance + 0.006, f"random-guess level ({chance:.2f})",
             color="#dc2626", ha="right", fontsize=10)
     ax.axhline(energy[0], ls=":", color="#6b7280", lw=1.2)
-    ax.text(0.0, energy[0] + 0.006, "image-only", color="#6b7280", fontsize=10)
+    ax.text(len(ms) - 0.4, energy[0] + 0.006, "image-only baseline", color="#6b7280",
+            ha="right", fontsize=10)
     ax.set_xticks(range(len(ms)))
     ax.set_xticklabels([NAME[m] for m in ms])
     ax.set_ylabel("Share of attention inside the lesion")
@@ -178,7 +179,6 @@ if __name__ == "__main__":
     fig_grounding()
     fig_reliance()
     fig_degradation()
-    fig_story()
     print("figures written to", FIGS)
     for p in sorted(FIGS.glob("*.png")):
         print(" ", p.name, f"{p.stat().st_size // 1024} KB")
