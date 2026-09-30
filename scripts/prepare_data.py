@@ -37,8 +37,13 @@ def extract_all(src_dir: Path, dest: Path) -> None:
     marker = dest / ".extracted"
     if marker.exists():
         return
+    zips = sorted(src_dir.glob("*.zip"))
+    if not zips:
+        # Nothing to extract (yet). Do NOT write the marker: a dataset downloaded later would
+        # otherwise be skipped forever by the early return above.
+        return
     dest.mkdir(parents=True, exist_ok=True)
-    for zp in sorted(src_dir.glob("*.zip")):
+    for zp in zips:
         print(f"extracting {zp.name}")
         with zipfile.ZipFile(zp) as z:
             z.extractall(dest)
@@ -55,7 +60,10 @@ def extract_all(src_dir: Path, dest: Path) -> None:
 
 
 def index_files(root: Path, exts=IMG_EXT) -> dict[str, Path]:
-    return {p.stem: p for p in root.rglob("*") if p.suffix.lower() in exts}
+    # "._name" files are AppleDouble stubs from macOS-made zips (e.g. the official HAM10000 mask
+    # zip), not images.
+    return {p.stem: p for p in root.rglob("*")
+            if p.suffix.lower() in exts and not p.name.startswith("._")}
 
 
 def _resize_one(job: tuple[str, str, bool]) -> str | None:
@@ -118,7 +126,8 @@ def prepare_padufes20() -> None:
     # Official Mendeley metadata (SHA256-verified). The Kaggle copy holds the same values but was
     # re-saved with different formatting (TRUE vs True, 1.0 vs 1), so it is not used.
     meta = pd.read_csv(DATA_ROOT / "raw" / "pad-ufes-20-official" / "metadata.csv")
-    files = index_files(ext)
+    # HF mirror ships loose .png files; the Kaggle mirror ships zips (extracted above).
+    files = index_files(ext) | index_files(raw)
     classes = ["ACK", "BCC", "MEL", "NEV", "SCC", "SEK"]
     meta["diagnostic"] = meta["diagnostic"].str.upper().str.strip()
     meta = meta[meta["diagnostic"].isin(classes)].reset_index(drop=True)
@@ -143,7 +152,11 @@ def prepare_ham10000() -> None:
     ext = DATA_ROOT / "interim" / "ham10000" / "extracted"
     extract_all(DATA_ROOT / "raw" / "ham10000", ext / "images")
     extract_all(DATA_ROOT / "raw" / "ham10000-masks", ext / "masks")
-    meta = pd.read_csv(next(ext.rglob("HAM10000_metadata.csv")))
+    meta_csv = next((p for folder in (ext, DATA_ROOT / "raw" / "ham10000")
+                     for p in folder.rglob("HAM10000_metadata.csv")), None)
+    if meta_csv is None:
+        raise FileNotFoundError("HAM10000_metadata.csv not found in interim/ or raw/ham10000")
+    meta = pd.read_csv(meta_csv)
     images = index_files(ext, {".jpg"})
     masks = {k.replace("_segmentation", ""): v
              for k, v in index_files(ext, {".png"}).items() if k.endswith("_segmentation")}
@@ -206,12 +219,48 @@ def prepare_isic2019() -> None:
           ["age_approx", "sex", "anatom_site_general"])
 
 
+def prepare_ddi() -> None:
+    """Dataset D: external test set only, so no folds are written (docs/04-preregistration.md §2).
+
+    The archive layout is whatever Stanford AIMI ships, so the metadata CSV is located by its
+    columns rather than by a fixed path.
+    """
+    raw = DATA_ROOT / "raw" / "ddi"
+    ext = DATA_ROOT / "interim" / "ddi" / "extracted"
+    extract_all(raw, ext)
+    wanted = {"DDI_file", "malignant", "skin_tone"}
+    meta_path = next((p for folder in (ext, raw) for p in folder.rglob("*.csv")
+                      if wanted <= set(pd.read_csv(p, nrows=0).columns)), None)
+    if meta_path is None:
+        raise FileNotFoundError(
+            f"no DDI metadata CSV with columns {sorted(wanted)} under {ext} or {raw}. "
+            "Download it from https://stanford.redivis.com/datasets/3r16-5mby7gfer "
+            "(Research Use Agreement required) into data/raw/ddi/")
+    meta = pd.read_csv(meta_path)
+    files = index_files(ext) | index_files(raw)
+    meta["stem"] = meta["DDI_file"].astype(str).str.rsplit(".", n=1).str[0]
+    missing = sorted(set(meta["stem"]) - set(files))
+    if missing:
+        raise FileNotFoundError(f"{len(missing)} images not found, e.g. {missing[:3]}")
+    cache_dir = DATA_ROOT / "interim" / "ddi" / f"images_{SIZE}"
+    meta["image_path"] = [str(cache_dir / f"{s}.jpg") for s in meta["stem"]]
+    pairs = zip(meta["stem"], meta["image_path"], strict=True)
+    cache([(str(files[s]), p, False) for s, p in pairs], "DDI")
+    meta["sample_id"] = meta["stem"]
+    # DDI's `malignant` is biopsy-proven ground truth; classes are [benign, malignant].
+    meta["y"] = meta["malignant"].astype(int)
+    meta["y_name"] = np.where(meta["y"] == 1, "malignant", "benign")
+    # No fold column: this set is only ever a test set.
+    write(meta.drop(columns=["stem"]), "ddi", "sample_id", ["skin_tone"])
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", required=True, choices=["padufes20", "ham10000", "isic2019"])
+    ap.add_argument("--dataset", required=True,
+                    choices=["padufes20", "ham10000", "isic2019", "ddi"])
     args = ap.parse_args()
     {"padufes20": prepare_padufes20, "ham10000": prepare_ham10000,
-     "isic2019": prepare_isic2019}[args.dataset]()
+     "isic2019": prepare_isic2019, "ddi": prepare_ddi}[args.dataset]()
 
 
 if __name__ == "__main__":

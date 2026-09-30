@@ -34,11 +34,17 @@ def check(ok: bool, msg: str) -> None:
     print(("PASS " if ok else "FAIL ") + msg)
 
 
+def is_junk(name: str) -> bool:
+    """macOS zips carry a __MACOSX/ tree of AppleDouble stubs named ``._<real name>``; the official
+    HAM10000 mask zip has one. They are metadata, not images."""
+    return "__MACOSX" in name or Path(name).name.startswith("._")
+
+
 def zip_names(folder: Path) -> list[str]:
     names = []
     for zp in folder.glob("*.zip"):
         with zipfile.ZipFile(zp) as z:
-            names += z.namelist()
+            names += [n for n in z.namelist() if not is_junk(n)]
     return names
 
 
@@ -55,10 +61,25 @@ def stems(names: list[str], ext: str) -> set[str]:
     return {Path(n).stem for n in names if n.lower().endswith(ext)}
 
 
+def image_stems(folder: Path, ext: str) -> set[str]:
+    """Stems of every image in this folder, whether it sits inside a zip (Kaggle mirrors) or
+    loose on disk (official sources and the Hugging Face PAD-UFES-20 mirror ship plain files)."""
+    return stems(zip_names(folder), ext) | {p.stem for p in folder.rglob("*")
+                                            if p.suffix.lower() == ext and not is_junk(p.name)}
+
+
+def read_data_file(folder: Path, suffix: str) -> bytes | None:
+    """Read a file from inside a zip in this folder, or loose on disk if it is not zipped."""
+    found = read_from_zip(folder, suffix)
+    if found is not None:
+        return found
+    loose = sorted(folder.rglob(f"*{suffix}"))
+    return loose[0].read_bytes() if loose else None
+
+
 def verify_pad() -> None:
     folder = RAW / "pad-ufes-20"
-    names = zip_names(folder)
-    pngs = stems(names, ".png")
+    pngs = image_stems(folder, ".png")
     check(len(pngs) == 2298, f"PAD-UFES-20: {len(pngs)} unique .png images (expected 2298)")
     official = RAW / "pad-ufes-20-official" / "metadata.csv"
     check(official.exists(), "PAD-UFES-20: official Mendeley metadata.csv present")
@@ -81,10 +102,9 @@ def verify_pad() -> None:
 
 
 def verify_ham() -> None:
-    names = zip_names(RAW / "ham10000")
-    jpgs = stems(names, ".jpg")
+    jpgs = image_stems(RAW / "ham10000", ".jpg")
     check(len(jpgs) == 10015, f"HAM10000: {len(jpgs)} unique .jpg images (expected 10015)")
-    raw = read_from_zip(RAW / "ham10000", "HAM10000_metadata.csv")
+    raw = read_data_file(RAW / "ham10000", "HAM10000_metadata.csv")
     check(raw is not None, "HAM10000: HAM10000_metadata.csv present")
     if raw is not None:
         meta = pd.read_csv(pd.io.common.BytesIO(raw))
@@ -92,15 +112,15 @@ def verify_ham() -> None:
               f"HAM10000: metadata rows {len(meta)}, all image_ids have images")
         check(sorted(meta["dx"].unique()) == ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"],
               "HAM10000: 7 diagnosis classes")
-    masks = {s.replace("_segmentation", "") for s in stems(zip_names(RAW / "ham10000-masks"),
-                                                            ".png")}
+    masks = {s.replace("_segmentation", "")
+             for s in image_stems(RAW / "ham10000-masks", ".png")}
     check(len(masks) == 10015 and masks == jpgs,
           f"HAM10000 masks: {len(masks)} masks, one per image")
 
 
 def verify_isic() -> None:
     folder = RAW / "isic2019"
-    jpgs = {s.replace("_downsampled", "") for s in stems(zip_names(folder), ".jpg")}
+    jpgs = {s.replace("_downsampled", "") for s in image_stems(folder, ".jpg")}
     check(len(jpgs) == 25331, f"ISIC 2019: {len(jpgs)} unique images (expected 25331)")
     # Official CSVs call 2,074 images "ISIC_xxx_downsampled"; trap sets use the plain id.
     gt = pd.read_csv(folder / "ISIC_2019_Training_GroundTruth.csv")

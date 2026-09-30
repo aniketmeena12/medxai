@@ -1,7 +1,7 @@
 # Dataset A: PAD-UFES-20 (6-class, smartphone clinical images, 21 metadata fields).
 data:
   name: padufes20
-  processed_csv: ${MEDFUSION_DATA:C:/Projects/medfusion-xai/data}/processed/padufes20/samples.csv
+  processed_csv: ${MEDFUSION_DATA:data}/processed/padufes20/samples.csv
   task: multiclass
   classes: [ACK, BCC, MEL, NEV, SCC, SEK]
   group_col: patient_id

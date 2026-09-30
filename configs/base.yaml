@@ -1,9 +1,9 @@
 # Shared defaults. Experiment configs `inherit` this file and override keys.
-# Paths: ${MEDFUSION_DATA} falls back to the project data/ folder (gitignored; project lives
-# outside OneDrive so data is never cloud-synced).
+# Paths: ${MEDFUSION_DATA} falls back to the relative data/ folder, so scripts are run from the
+# repository root. Data is gitignored and never uploaded.
 paths:
-  data_root: ${MEDFUSION_DATA:C:/Projects/medfusion-xai/data}
-  runs_root: ${MEDFUSION_DATA:C:/Projects/medfusion-xai/data}/experiments
+  data_root: ${MEDFUSION_DATA:data}
+  runs_root: ${MEDFUSION_DATA:data}/experiments
 
 image:
   cache_size: 256        # images are cached square at this size by scripts/prepare_data.py

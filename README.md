@@ -12,28 +12,42 @@ trap sets, and a counterfactual metadata test.
 - Novelty and positioning: [`docs/research/03-novelty-and-direction.md`](docs/research/03-novelty-and-direction.md)
 - Full project context: [`PROJECT_HANDBOOK.md`](PROJECT_HANDBOOK.md)
 
-## Setup (Windows, as used on the dev machine)
+## Setup
 
-The project lives at `C:\Projects\medfusion-xai` (outside OneDrive, so data is never cloud-synced).
-All data is in `data/` (gitignored); the virtual environment is `C:\medfusion-venv`.
+Current machine (Linux, RTX 5080). The system Python is 3.14, which torch has no wheels for, so the
+venv is pinned to 3.12:
 
 ```bash
-python -m venv C:/medfusion-venv
-C:/medfusion-venv/Scripts/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
-C:/medfusion-venv/Scripts/python -m pip install -e ".[dev]"
-C:/medfusion-venv/Scripts/python -m pytest -q
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python torch torchvision --index-url https://download.pytorch.org/whl/cu128
+uv pip install --python .venv/bin/python -e ".[dev]"
+.venv/bin/python -m pytest -q          # 42 passed
 ```
 
-Set `MEDFUSION_DATA` to use a data root other than `data/`.
+Earlier dev machine (Windows, RTX 3050): project at `C:\Projects\medfusion-xai`, venv
+`C:\medfusion-venv`, same `pip install -e ".[dev]"` after the cu128 torch wheel.
+
+Set `MEDFUSION_DATA` to use a data root other than `data/`; otherwise run the scripts from the
+repository root.
 
 ## Pipeline
 
 ```bash
-bash scripts/download_data.sh                        # PAD-UFES-20, HAM10000 (+masks), ISIC 2019, Bissoto repos
-python scripts/prepare_data.py --dataset padufes20   # cache 256px images, grouped 5-fold splits
-python scripts/prepare_data.py --dataset ham10000
-python scripts/prepare_data.py --dataset isic2019    # after ham10000 (attaches shared masks)
-python scripts/train.py --data configs/data_padufes20.yaml --model M1
+# 1. data (~19 GB download, 29 GB on disk once cached)
+bash scripts/download_data_official.sh     # official: Dataverse (HAM10000), ISIC S3, Mendeley, GitHub
+bash scripts/download_padufes_images.sh    # PAD-UFES-20 images: HF mirror; TARGET=kaggle for Kaggle
+# bash scripts/download_data.sh            # alternative: all Kaggle mirrors (needs ~/.kaggle)
+.venv/bin/python scripts/verify_data.py    # 15/15 checks against the official facts
+
+# 2. processing: cache 256px images/masks, write grouped 5-fold splits
+.venv/bin/python scripts/prepare_data.py --dataset padufes20
+.venv/bin/python scripts/prepare_data.py --dataset ham10000
+.venv/bin/python scripts/prepare_data.py --dataset isic2019   # after ham10000 (attaches shared masks)
+
+# 3. tuning (pre-registered 6-trial grid per model), then the full protocol
+bash scripts/queue_tune.sh padufes20
+.venv/bin/python scripts/train.py --data configs/data_padufes20.yaml --model M1
+.venv/bin/python scripts/train_trap.py --model M1 --curve      # ISIC 2019 trap sets
 ```
 
 Models: `B0` image-only · `B1` metadata-only · `B3` concat · `B4` FiLM · `B5` MetaBlock · `M1` cross-attention.

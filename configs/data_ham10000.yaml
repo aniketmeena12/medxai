@@ -2,7 +2,7 @@
 # dx_type is deliberately NOT used: it encodes how the label was confirmed (label leakage).
 data:
   name: ham10000
-  processed_csv: ${MEDFUSION_DATA:C:/Projects/medfusion-xai/data}/processed/ham10000/samples.csv
+  processed_csv: ${MEDFUSION_DATA:data}/processed/ham10000/samples.csv
   task: multiclass
   classes: [akiec, bcc, bkl, df, mel, nv, vasc]
   group_col: lesion_id

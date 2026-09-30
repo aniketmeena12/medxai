@@ -122,32 +122,55 @@ The dataset plan exists to rule out all five.
 
 | Item | State |
 |---|---|
-| Stage | **Reframed 2026-09-17 (see top of file); pre-registration written; data acquisition not yet started.** |
-| New machine (2026-09-17) | Windows 11, RTX 3050 6 GB laptop GPU, 16 GB RAM, Python 3.11.9. **Project moved to `C:\Projects\medfusion-xai`** (out of OneDrive, so data is never cloud-synced); all data in its `data/` folder (gitignored); venv `C:\medfusion-venv`. Code rebuilt from scratch on this machine (no earlier code existed). Datasets downloaded from Kaggle mirrors + official metadata and verified (`scripts/verify_data.py`, 15/15). Compute: laptop + Kaggle. |
-| Git | Branch `master`. **No commits yet and no remote configured.** Everything is untracked. |
-| Data on disk | **None.** `data/` holds only `.gitkeep` and `SOURCE_TEMPLATE.md`. |
-| Experiments run | **None.** |
-| Tests | `pytest -q` → **13 passed** (verified 2026-09-16, CPU). |
-| Local `.venv` | Only partly installed: torch 2.13.0+cpu, numpy, scikit-learn, pytest. **timm, pandas, grad-cam and opencv are missing.** Run `pip install -e ".[dev]"`. |
+| Stage | **Pre-registration frozen; all three datasets downloaded, verified (15/15) and processed; hyperparameter tuning under way.** Nothing from the full protocol (blocks A/B/C) has been run yet. |
+| Current machine (2026-09-19) | **Linux**, RTX 5080 16 GB, project at `/home/ashok/Documents/medxai`, venv `.venv` (Python 3.12.13, torch 2.11.0+cu128). The system Python is 3.14, which torch does not ship wheels for — `uv venv --python 3.12 .venv` is how the venv was made. Note `ollama` runs on this box and reloads ~13 GB of GPU on demand; training fits alongside at ~1.6 GB but the margin is thin. |
+| Previous machine (2026-09-17) | Windows 11, RTX 3050 6 GB, `C:\Projects\medfusion-xai`, venv `C:\medfusion-venv`. Source of the timing run in `docs/04-preregistration.md` §8 and of the B0/B3/B4 PAD-UFES-20 tuned configs. |
+| Git | Branch `main`, 2 commits, no remote configured. |
+| Data on disk | **29 GB.** PAD-UFES-20 (2,298 imgs) · HAM10000 (10,015 imgs + 10,015 masks) · ISIC 2019 (25,331 imgs) · both Bissoto repos at their pinned commits. Raw + `interim/` 256² caches + `processed/*/samples.csv`. All gitignored; provenance in each `data/raw/*/SOURCE.md`. |
+| Data sources (2026-09-19) | Official where possible: HAM10000 images/masks from Harvard Dataverse (**published MD5s matched**), ISIC 2019 images from the ISIC S3, PAD-UFES-20 metadata from Mendeley (SHA256 matched). PAD-UFES-20 **images** come from the Hugging Face mirror `SalmaneExploring/pad-ufes-20` — Mendeley exposes no direct image-folder link and this machine has no Kaggle credentials. See `data/raw/pad-ufes-20/SOURCE.md` for the fidelity checks and the one gap left open. |
+| Experiments run | Tuning only. PAD-UFES-20: B0/B3/B4 (prev. machine) + B5/M1 (here) → `configs/tuned/padufes20_*.yaml`. HAM10000 tuning queued. One debug run (`padufes20_M1_debug_001`, 1 epoch) as a smoke test; `complete_protocol: false`. |
+| Tests | `pytest -q` → **42 passed** (2026-09-19, this machine, GPU present). |
 | Supervisor report | `docs/MedFusion-XAI_Supervisor_Report.docx` (8 Sep 2026). It asks for decisions 1–4 in §13. |
+
+### Pipeline as it actually runs now
+
+```bash
+bash scripts/download_data_official.sh          # official sources, no credentials
+bash scripts/download_padufes_images.sh         # PAD images (HF mirror; TARGET=kaggle for Kaggle)
+.venv/bin/python scripts/verify_data.py         # 15/15
+.venv/bin/python scripts/prepare_data.py --dataset padufes20   # then ham10000, then isic2019
+bash scripts/queue_tune.sh padufes20            # 6-trial grid per model
+.venv/bin/python scripts/train.py --data configs/data_padufes20.yaml --model M1
+```
+
+`scripts/download_data.sh` (Kaggle mirrors) is kept as the alternative route.
 
 ### What's implemented vs scaffold
 
 | Component | File | State |
 |---|---|---|
-| Cross-attention fusion model + metadata tokenizer | `src/medfusion/models/fusion.py` | ✅ Implemented + tested |
-| Localization metrics (IoU, mIoU, hit-rate, pointing game, attention mass) | `src/medfusion/eval/localization.py` | ✅ Implemented + tested (see §15 for a hit-rate issue) |
-| Shortcut metrics (degradation curve, drain-stratified AUC) | `src/medfusion/eval/shortcut.py` | ✅ Implemented + tested |
-| Stats (bootstrap CI, paired bootstrap) | `src/medfusion/eval/stats.py` | ✅ Implemented, not tested |
-| PAD-UFES-20 preparation + patient-grouped folds | `scripts/prepare_padufes.py` | ✅ Implemented, not yet run on real data |
-| Dataset classes | `src/medfusion/data/` | ❌ Empty |
-| Image encoder wrapper (timm → patch tokens) | `src/medfusion/models/` | ❌ Missing |
-| Baselines B0–B4 | `src/medfusion/models/` | ❌ Missing |
-| Training loop (5-fold × 3 seeds) | `scripts/train.py` | ❌ Scaffold, exits 1 |
-| Saliency generation | `scripts/explain.py`, `src/medfusion/xai/` | ❌ Scaffold, exits 1 |
-| XAI evaluation wiring + annotation loaders | `scripts/evaluate_xai.py` | ❌ Scaffold, exits 1 |
-| Utils (seeding, logging, config loading) | `src/medfusion/utils/` | ❌ Empty |
-| Label mapping | `docs/label_mapping.md` | ❌ All TODO |
+| Metadata encoding (MISSING as a category), field dropout | `src/medfusion/data/metadata.py` | ✅ Implemented + tested |
+| Grouped/stratified splits, leak assertions | `src/medfusion/data/splits.py` | ✅ Implemented + tested |
+| Datasets, transforms, mask loading | `src/medfusion/data/dataset.py` | ✅ Implemented + tested |
+| Trap sets (image traps + metadata resampling) | `src/medfusion/data/trap.py` | ✅ Implemented + tested |
+| Image encoder (timm → spatial map, ConvNeXt + ViT) | `src/medfusion/models/encoder.py` | ✅ Implemented + tested |
+| B0/B3/B4/B5/M1 + tokenizer; B1 tabular | `src/medfusion/models/` | ✅ Implemented + tested |
+| Training + CV (folds × seeds, resumable, raw per-fold output) | `src/medfusion/train/engine.py` | ✅ Implemented; smoke-tested on real data |
+| Trap-set cell runner | `src/medfusion/train/trap.py` | ✅ Implemented + tested |
+| Grad-CAM, RISE, parameter-randomization sanity gate | `src/medfusion/xai/attribution.py` | ✅ Implemented + tested |
+| Localization (energy-in-mask, pointing game, Otsu IoU) | `src/medfusion/eval/localization.py` | ✅ Implemented + tested |
+| Shortcut (degradation area, offloading index, stratified AUC) | `src/medfusion/eval/shortcut.py` | ✅ Implemented + tested |
+| Counterfactual map shift (P4) | `src/medfusion/eval/counterfactual.py` | ✅ Implemented + tested |
+| Stats (bootstrap CIs, paired tests) | `src/medfusion/eval/stats.py` | ✅ Implemented + tested |
+| Config loader, seeding, run dirs | `src/medfusion/utils/` | ✅ Implemented + tested |
+| Download / verify / prepare / tune / train / train_trap | `scripts/` | ✅ Implemented; all run on real data except `train_trap.py` |
+| **Endpoint driver** (compute P1–P5 from checkpoints → `results/`) | — | ❌ **Not written yet.** The library code exists; nothing wires it into tables/figures |
+| Label mapping (needed only if DDI is added) | `docs/label_mapping.md` | ❌ Absent |
+| DDI (dataset D, secondary) | — | ❌ Not obtained; needs the Stanford AIMI research-use agreement (manual) |
+
+> Sections 3–10 below were written for the Windows machine and the older code layout (`prepare_padufes.py`,
+> `explain.py`, `dataset_*.yaml`). Where they disagree with this section or with `README.md`, this
+> section and the README are current.
 
 ---
 

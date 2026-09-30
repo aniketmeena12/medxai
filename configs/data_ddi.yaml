@@ -1,0 +1,16 @@
+# Dataset D: DDI (Diverse Dermatology Images), Stanford AIMI, DOI 10.71718/kqee-3z39.
+# External test set only - no model is ever trained or tuned on it. Evaluated zero-shot with
+# all-MISSING metadata tokens; label mapping frozen in docs/label_mapping.md.
+data:
+  name: ddi
+  processed_csv: ${MEDFUSION_DATA:data}/processed/ddi/samples.csv
+  task: binary
+  classes: [benign, malignant]
+  # DDI publishes no patient ids; each row is one biopsy-proven lesion image.
+  group_col: sample_id
+  # No usable clinical metadata: fusion models receive every field as MISSING (the encoding they
+  # already met through meta_field_dropout during training).
+  categorical: []
+  continuous: []
+  external_only: true
+  stratify_by: skin_tone      # Fitzpatrick I-II / III-IV / V-VI

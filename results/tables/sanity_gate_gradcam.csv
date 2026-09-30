@@ -1,0 +1,8 @@
+method,n_images,mean_ssim,threshold,passed,dataset,model
+gradcam,128,0.035813190042972565,0.5,True,ham10000,B0
+gradcam,128,0.14261162281036377,0.5,True,ham10000,B3
+gradcam,128,0.09393418580293655,0.5,True,ham10000,B4
+gradcam,128,0.055791448801755905,0.5,True,ham10000,B5
+gradcam,128,0.0844041034579277,0.5,True,ham10000,M1
+gradcam,128,0.06665509194135666,0.5,True,padufes20,B0
+gradcam,128,0.03886382281780243,0.5,True,padufes20,M1
